@@ -15,13 +15,23 @@ DST_SERVICE="/etc/systemd/system/faas_register_tunnel.service"
 ENV_FILE="/etc/faas_register_tunnel.env"
 
 #--------------------------------------------------------------------
-# Require root privileges
+# 1. Detect the Real User (who ran sudo)
 #--------------------------------------------------------------------
 if [[ $EUID -ne 0 ]]; then
   echo "ERROR: Run with sudo:"
   echo "   sudo bash install.sh"
   exit 1
 fi
+
+# $SUDO_USER holds the username of the person who ran sudo
+# Fallback to $USER if logged in as root directly
+SERVICE_USER="${SUDO_USER:-$USER}"
+
+# Get the user's home directory and group dynamically
+SERVICE_HOME=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
+SERVICE_GROUP=$(id -gn "$SERVICE_USER")
+
+echo "→ Configuring service for user: $SERVICE_USER ($SERVICE_HOME)"
 
 #--------------------------------------------------------------------
 backup_if_exists() {
@@ -32,7 +42,7 @@ backup_if_exists() {
 }
 
 #--------------------------------------------------------------------
-# 1. Verify source files exist
+# 2. Verify source files exist
 #--------------------------------------------------------------------
 if [[ ! -f "$SRC_SCRIPT" ]]; then
   echo "ERROR: Missing script in current directory: $SRC_SCRIPT"
@@ -45,13 +55,13 @@ if [[ ! -f "$SRC_SERVICE" ]]; then
 fi
 
 #--------------------------------------------------------------------
-# 2. Install ENV file (if missing)
+# 3. Install ENV file (owned by the SERVICE_USER)
 #--------------------------------------------------------------------
 echo ""
 echo "→ Installing environment file…"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  cat >"$ENV_FILE" <<'EOF'
+  cat >"$ENV_FILE" <<EOF
 # REQUIRED — edit these before starting service
 DOMAIN="bitone.in"
 TOKEN=""
@@ -60,14 +70,37 @@ USERNAME=""
 LOCAL_PORT=8080
 RENEW_BEFORE=300
 EOF
+  
+  # IMPORTANT: Change ownership so the service user can read it
+  chown "$SERVICE_USER":"$SERVICE_GROUP" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  echo "Created: $ENV_FILE"
+  echo "Created: $ENV_FILE (Owned by $SERVICE_USER)"
 else
-  echo "$ENV_FILE already exists — leaving untouched."
+  echo "$ENV_FILE already exists — ensuring correct ownership."
+  chown "$SERVICE_USER":"$SERVICE_GROUP" "$ENV_FILE"
 fi
 
 #--------------------------------------------------------------------
-# 3. Install tunnel script
+# 4. Check/Generate SSH Key for SERVICE_USER
+#--------------------------------------------------------------------
+echo ""
+echo "→ Checking SSH key for $SERVICE_USER…"
+
+KEY_PATH="$SERVICE_HOME/.ssh/bitone_key"
+
+if [[ ! -f "$KEY_PATH" ]]; then
+  echo "   Key missing. Generating new ED25519 key..."
+  # Run ssh-keygen as the actual user to get permissions right automatically
+  sudo -u "$SERVICE_USER" mkdir -p "$SERVICE_HOME/.ssh"
+  sudo -u "$SERVICE_USER" chmod 700 "$SERVICE_HOME/.ssh"
+  sudo -u "$SERVICE_USER" ssh-keygen -t ed25519 -f "$KEY_PATH" -N "" -C "faas-tunnel"
+  echo "   Key generated at: $KEY_PATH"
+else
+  echo "   Key found at: $KEY_PATH"
+fi
+
+#--------------------------------------------------------------------
+# 5. Install tunnel script
 #--------------------------------------------------------------------
 echo ""
 echo "→ Installing tunnel script…"
@@ -80,13 +113,18 @@ chown root:root "$DST_SCRIPT"
 echo "Installed: $DST_SCRIPT"
 
 #--------------------------------------------------------------------
-# 4. Install systemd service
+# 6. Install systemd service & Patch User
 #--------------------------------------------------------------------
 echo ""
 echo "→ Installing systemd service…"
 
 backup_if_exists "$DST_SERVICE"
 cp "$SRC_SERVICE" "$DST_SERVICE"
+
+# DYNAMICALLY UPDATE THE USER IN THE SERVICE FILE
+# This replaces "User=..." with "User=actual_user"
+sed -i "s/^User=.*/User=$SERVICE_USER/" "$DST_SERVICE"
+
 chmod 644 "$DST_SERVICE"
 
 echo "Reloading systemd…"
@@ -97,10 +135,10 @@ systemctl enable faas_register_tunnel.service
 
 echo ""
 echo "────────────────────────────────────────────"
-echo " ✔ Installation complete!"
+echo " ✔ Installation complete for user: $SERVICE_USER"
 echo ""
 echo "Edit your env file:"
-echo "  sudo nano /etc/faas_register_tunnel.env"
+echo "  sudo nano $ENV_FILE"
 echo ""
 echo "Start the service:"
 echo "  sudo systemctl start faas_register_tunnel.service"
