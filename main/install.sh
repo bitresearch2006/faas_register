@@ -107,7 +107,7 @@ echo "→ Installing tunnel script…"
 
 backup_if_exists "$DST_SCRIPT"
 cp "$SRC_SCRIPT" "$DST_SCRIPT"
-chmod 700 "$DST_SCRIPT"
+chmod 755 "$DST_SCRIPT"
 chown root:root "$DST_SCRIPT"
 
 echo "Installed: $DST_SCRIPT"

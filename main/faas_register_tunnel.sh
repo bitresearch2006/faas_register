@@ -118,8 +118,24 @@ while true; do
     request_certificate || { sleep 30; continue; }
   fi
 
-  # 2) Check certificate expiry
+  # 2) Check certificate validity & expiry
+  # If ssh-keygen fails, the cert is corrupted -> delete it and retry
+  if ! ssh-keygen -Lf "$CERT" >/dev/null 2>&1; then
+    log "Certificate is corrupted or invalid. Deleting and requesting new one..."
+    rm -f "$CERT"
+    continue
+  fi
+
   EXPIRY=$(ssh-keygen -Lf "$CERT" | awk '/Valid:/ {print $5}')
+  
+  # Handle case where date parsing fails
+  if ! EXP_SECONDS=$(date -d "$EXPIRY" +%s 2>/dev/null); then
+     log "Could not parse certificate date. Deleting..."
+     rm -f "$CERT"
+     continue
+  fi
+
+  NOW_SECONDS=$(date +%s)
   EXP_SECONDS=$(date -d "$EXPIRY" +%s)
   NOW_SECONDS=$(date +%s)
 
