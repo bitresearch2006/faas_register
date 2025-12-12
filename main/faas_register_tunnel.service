@@ -18,8 +18,10 @@ ExecStart=/usr/local/sbin/faas_register_tunnel.sh daemon
 
 Restart=on-failure
 RestartSec=10
-StartLimitBurst=5
-StartLimitIntervalSec=60
+
+# Send logs to the journal for easier inspection
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
