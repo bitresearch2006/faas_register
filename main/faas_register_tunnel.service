@@ -1,0 +1,23 @@
+[Unit]
+Description=WSL Tunnel autossh service (connect to VM)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Runs as root so NO username required
+User=root
+
+# Environment variables for DOMAIN, TOKEN, PRINCIPAL, USERNAME, LOCAL_PORT, etc.
+EnvironmentFile=/etc/wsl_tunnel.env
+
+# Script installed globally
+ExecStart=/usr/local/sbin/wsl_tunnel.sh daemon
+
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Install]
+WantedBy=multi-user.target
