@@ -52,7 +52,23 @@ request_certificate() {
     return 1
   fi
 
-  printf "%s\n" "$(printf "%s" "$RESPONSE" | jq -r '.cert' | sed '/^$/d')" > "$CERT"
+  # Extract raw certificate (may contain extra newlines)
+  RAW_CERT=$(printf "%s" "$RESPONSE" | jq -r '.cert')
+
+  echo "----- RAW CERT START -----"
+  printf "%q\n" "$RAW_CERT"
+  echo "----- RAW CERT END -----"
+
+  # Clean certificate: remove all trailing empty lines, keep final non-empty one
+  CLEAN_CERT=$(printf "%s" "$RAW_CERT" | awk 'NF { last = $0 } END { print last }')
+
+  echo "----- CLEAN CERT START -----"
+  printf "%q\n" "$CLEAN_CERT"
+  echo "----- CLEAN CERT END -----"
+
+  # Write cleaned cert with exactly one newline
+  printf "%s\n" "$CLEAN_CERT" > "$CERT"
+
 
   chmod 600 "$CERT"
 
