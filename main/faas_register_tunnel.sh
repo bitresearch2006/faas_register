@@ -95,7 +95,7 @@ start_tunnel() {
     -o CertificateFile="$CERT" \
     -o ServerAliveInterval=30 \
     -o ServerAliveCountMax=3 \
-    -o ExitOnFailure=yes \
+    -o ExitOnForwardFailure=yes \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     -R "127.0.0.1:${PORT}:localhost:${LOCAL_PORT}" \
