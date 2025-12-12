@@ -22,7 +22,7 @@ DST_HELPER="/usr/local/sbin/fass_register_tunnel.sh"
 DST_SERVICE_UNIT="/etc/systemd/system/faas_register_tunnel.service"
 
 # Environment file (global)
-ENV_FILE="/etc/wsl_tunnel.env"
+ENV_FILE="/etc/faas_register_tunnel.env"
 
 echo "=== FAAS Tunnel Service Installer ==="
 
@@ -53,7 +53,7 @@ chown root:root "$DST_SERVICE_UNIT"
 if [ ! -f "$ENV_FILE" ]; then
   echo "--> Creating environment template at $ENV_FILE (fill values before starting service)"
   cat > "$ENV_FILE" <<'ENV'
-# /etc/wsl_tunnel.env - global env for faas_register_tunnel.sh
+# /etc/faas_register_tunnel.env - global env for faas_register_tunnel.sh
 # REQUIRED: set TOKEN to the value admin gave you.
 DOMAIN="bitone.in"
 TOKEN="PASTE_YOUR_TOKEN_HERE"
@@ -83,10 +83,10 @@ cat <<EOF
 
 INSTALL COMPLETE — NEXT STEPS:
 
-1) Edit /etc/wsl_tunnel.env and set the TOKEN and any other values:
-   sudo nano /etc/wsl_tunnel.env
+1) Edit /etc/faas_register_tunnel.env and set the TOKEN and any other values:
+   sudo nano /etc/faas_register_tunnel.env
    (Ensure the file remains root-only:)
-   sudo chmod 600 /etc/wsl_tunnel.env
+   sudo chmod 600 /etc/faas_register_tunnel.env
 
 2) Check logs to confirm the service started correctly:
    sudo journalctl -u faas_register_tunnel.service -f
@@ -97,7 +97,7 @@ INSTALL COMPLETE — NEXT STEPS:
    sudo /usr/local/sbin/faas_register_tunnel.sh daemon
 
 4) If service fails to start, check:
-   - /etc/wsl_tunnel.env for correct TOKEN & DOMAIN
+   - /etc/faas_register_tunnel.env for correct TOKEN & DOMAIN
    - that /usr/local/sbin/faas_register_tunnel.sh is executable (permission 700)
    - system journal: sudo journalctl -u faas_register_tunnel.service
 
@@ -107,7 +107,7 @@ INSTALL COMPLETE — NEXT STEPS:
 
 Notes:
 - The installer copies your uploaded files; it does NOT alter them.
-- The service runs as root and reads /etc/wsl_tunnel.env. Keep that file secure (600).
+- The service runs as root and reads /etc/faas_register_tunnel.env. Keep that file secure (600).
 - You can change the service unit name or paths if desired.
 
 EOF

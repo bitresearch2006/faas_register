@@ -40,8 +40,8 @@ if [ -f "$ENVFILE" ]; then
     source "$ENVFILE"
 else
     # fallback to system-wide env file installed by install.sh
-    if [ -f /etc/wsl_tunnel.env ]; then
-        ENVFILE="/etc/wsl_tunnel.env"
+    if [ -f /etc/faas_register_tunnel.env ]; then
+        ENVFILE="/etc/faas_register_tunnel.env"
         # shellcheck disable=SC1091
         source "$ENVFILE"
     fi
