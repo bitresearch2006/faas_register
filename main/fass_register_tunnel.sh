@@ -154,43 +154,90 @@ stop_autossh() {
 }
 
 cert_ttl_remaining() {
-  # return seconds remaining until cert expiry (0 if unreadable/expired)
-  if [ ! -f "$CERT" ]; then echo 0; return; fi
-  # parse ssh-keygen -L output to find "Valid: from ... to <ts>"
-  OUT=$("$SSH_BIN" -Q >/dev/null 2>&1 || true)  # ensure ssh exists
-  INFO=$("$SSH_BIN" -L -f /dev/null 2>/dev/null || true) || true
-  # use ssh-keygen to decode cert
-  TTL_LINE=$("$SSH_BIN" -G 2>/dev/null || true)
-  # safer: use ssh-keygen -L -f "$CERT" and parse the Valid: line
-  RAW=$("$SSH_BIN" -v 2>/dev/null || true)
-  # Use ssh-keygen -L
-  RAW2=$(ssh-keygen -L -f "$CERT" 2>/dev/null || true)
-  # find "Valid: from ... to ..."
-  LINE=$(echo "$RAW2" | awk '/Valid: /{print; exit}' || true)
-  if [ -z "$LINE" ]; then
-    # fallback: return 0
-    echo 0; return
+  # $CERT should be set to the certificate path (e.g. ~/.ssh/id_rsa-cert.pub)
+  if [ -z "${CERT:-}" ] || [ ! -f "$CERT" ]; then
+    echo 0
+    return 0
   fi
-  # Extract the 'to' ISO timestamp
-  # Example: Valid: from 2025-12-01T12:00:00 to 2025-12-01T13:00:00
-  TO=$(echo "$LINE" | sed -E 's/.* to ([0-9T:\-+.]+).*/\1/')
-  if [ -z "$TO" ]; then echo 0; return; fi
-  # Use python to compute seconds remaining
-  REM=$("$PY3_BIN" - <<PY
-import datetime,sys
-s="$TO"
+
+  # Grab the 'Valid:' line from ssh-keygen output (first occurrence)
+  raw=$(ssh-keygen -L -f "$CERT" 2>/dev/null || true)
+  valid_line=$(printf '%s\n' "$raw" | awk '/^[[:space:]]*Valid:/{print; exit}')
+
+  if [ -z "$valid_line" ]; then
+    # no valid info
+    echo 0
+    return 0
+  fi
+
+  # Try to extract the expiry timestamp (the 'to' value). Examples of valid_line:
+  #   Valid: from 2025-12-11T11:22:33 to 2025-12-11T12:22:33
+  #   Valid: from 2025-12-11T11:22:33+05:30 to 2025-12-11T12:22:33+05:30
+  #   or "Valid:  from Thu Dec 11 11:22:33 2025"
+  # We'll try ISO-like first, then fallback to more generic parsing.
+
+  # 1) try to capture an ISO-like timestamp after ' to '
+  to_iso=$(printf '%s\n' "$valid_line" | sed -E 's/.* to ([0-9T:\-+]+).*/\1/')
+
+  # Helper: use python3 if available for robust parsing and timezone handling
+  if command -v python3 >/dev/null 2>&1 && [ -n "$to_iso" ]; then
+    # python will print integer seconds remaining (>=0), or 0 on error
+    secs=$(
+      python3 - <<PY
+import sys,datetime
+s = """$to_iso"""
 try:
-  # parse using fromisoformat (handles timezone if present)
-  exp=datetime.datetime.fromisoformat(s)
-  now=datetime.datetime.now(exp.tzinfo) if exp.tzinfo else datetime.datetime.utcnow()
-  rem=(exp - now).total_seconds()
-  print(int(rem) if rem>0 else 0)
-except Exception as e:
-  print(0)
+    # Try isoformat first (handles timezone offsets)
+    exp = datetime.datetime.fromisoformat(s)
+    # If exp has no tzinfo, treat it as naive local time -> compare to local now
+    now = datetime.datetime.now(exp.tzinfo) if exp.tzinfo else datetime.datetime.now()
+    rem = int((exp - now).total_seconds())
+    print(rem if rem > 0 else 0)
+except Exception:
+    # Try a more lenient parse using strptime patterns (fallback)
+    try:
+        for fmt in ("%a %b %d %H:%M:%S %Y", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                exp = datetime.datetime.strptime(s, fmt)
+                now = datetime.datetime.now()
+                rem = int((exp - now).total_seconds())
+                print(rem if rem > 0 else 0)
+                raise SystemExit(0)
+            except Exception:
+                pass
+        print(0)
+    except Exception:
+        print(0)
 PY
-)
-  echo "$REM"
+    )
+    # ensure numeric
+    if printf '%s' "$secs" | grep -Eq '^[0-9]+$'; then
+      echo "$secs"
+      return 0
+    fi
+  fi
+
+  # 2) Fallback: try parsing a human-readable 'to' date with date -d (GNU date)
+  # extract everything after ' to ' up to end-of-line
+  to_human=$(printf '%s\n' "$valid_line" | sed -E 's/.* to (.*)/\1/')
+  if [ -n "$to_human" ] && command -v date >/dev/null 2>&1; then
+    # date -d returns epoch seconds for many common formats
+    exp_epoch=$(date -d "$to_human" +%s 2>/dev/null || true)
+    if [ -n "$exp_epoch" ] && printf '%s' "$exp_epoch" | grep -Eq '^[0-9]+$'; then
+      now_epoch=$(date +%s)
+      rem=$((exp_epoch - now_epoch))
+      if [ "$rem" -gt 0 ]; then
+        echo "$rem"
+        return 0
+      fi
+    fi
+  fi
+
+  # 3) If we couldn't parse expiry, return 0
+  echo 0
+  return 0
 }
+
 
 # Main actions
 case "${1:-}" in
