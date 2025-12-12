@@ -6,7 +6,7 @@ set -euo pipefail
 ###############################################################################
 DOMAIN="bitone.in"
 TOKEN="a795166810edffb9c9f098f3aacd9775a002525c2282c99e"     # token from server
-PRINCIPAL="bitresearch"                                     # Linux login user
+PRINCIPAL="bitresearch2006"                                     # Linux login user
 NAME="alice"                                                # public tunnel name
 KEY="$HOME/.ssh/bitone_key"
 LOCAL_PORT=8080                                             # local service port
