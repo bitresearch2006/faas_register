@@ -183,7 +183,11 @@ start_autossh() {
   pkill -f "autossh.*-R .*:${REMOTE_PORT}:localhost:${LOCAL_PORT}" || true
   sleep 1
   log "Starting autossh: remote 127.0.0.1:${REMOTE_PORT} -> local localhost:${LOCAL_PORT}"
-  "$AUTOSSH_BIN" -M 0 -f -N -o "ExitOnForwardFailure=yes" -i "$KEY" -o "CertificateFile=$CERT" \
+  "$AUTOSSH_BIN" -M 0 -f -N \
+    -o "ExitOnForwardFailure=yes" \
+    -o "ServerAliveInterval=30" -o "ServerAliveCountMax=3" \
+    -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" \
+    -i "$KEY" -o "CertificateFile=$CERT" \
     -R 127.0.0.1:${REMOTE_PORT}:localhost:${LOCAL_PORT} "${PRINCIPAL}@${DOMAIN}"
   sleep 1
   if pgrep -f "autossh.*-R .*:${REMOTE_PORT}:localhost:${LOCAL_PORT}" >/dev/null; then
@@ -194,6 +198,7 @@ start_autossh() {
     return 21
   fi
 }
+
 
 stop_autossh() {
   pkill -f "autossh.*-R .*:${REMOTE_PORT}:localhost:${LOCAL_PORT}" || true
