@@ -24,12 +24,22 @@
 #
 set -euo pipefail
 
-# load env if present
+# Load environment variables
 ENVFILE="${HOME}/.wsl_tunnel_env"
+
+# Preferred: user-level env file
 if [ -f "$ENVFILE" ]; then
-  # shellcheck disable=SC1090
-  source "$ENVFILE"
+    # shellcheck disable=SC1090
+    source "$ENVFILE"
+else
+    # fallback to system-wide env file installed by install.sh
+    if [ -f /etc/wsl_tunnel.env ]; then
+        ENVFILE="/etc/wsl_tunnel.env"
+        # shellcheck disable=SC1091
+        source "$ENVFILE"
+    fi
 fi
+
 
 # Defaults (override via ~/.wsl_tunnel_env)
 DOMAIN="${DOMAIN:-bitone.in}"
