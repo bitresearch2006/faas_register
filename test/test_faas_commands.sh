@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 # test_faas_commands.sh
 # Build and print the curl + autossh commands that faas_register_tunnel.sh would run.
