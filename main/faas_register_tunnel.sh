@@ -119,13 +119,8 @@ while true; do
   fi
 
   # 2) Check certificate expiry
- # Extract expiry timestamp
-  expiry=$(ssh-keygen -L -f "$CERT" | grep "Valid:" | sed -E 's/.*to ([^ ]+).*/\1/')
-  if ! expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null); then
-      log "ERROR: Unable to parse expiry time from certificate: $expiry"
-      exit 1
-  fi
-  EXP_SECONDS=$(date -d "$expiry_epoch" +%s)
+  EXPIRY=$(ssh-keygen -Lf "$CERT" | awk '/Valid:/ {print $5}')
+  EXP_SECONDS=$(date -d "$EXPIRY" +%s)
   NOW_SECONDS=$(date +%s)
 
   if (( EXP_SECONDS - NOW_SECONDS < RENEW_BEFORE )); then
