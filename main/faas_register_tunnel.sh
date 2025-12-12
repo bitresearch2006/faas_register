@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# wsl_tunnel.sh - WSL client: get cert, discover remote port, start autossh, renew cert automatically
+# faas_register_tunnel.sh - WSL client: get cert, discover remote port, start autossh, renew cert automatically
 #
 # Install:
 #   mkdir -p ~/bin
-#   cp wsl_tunnel.sh ~/bin/wsl_tunnel.sh
-#   chmod 700 ~/bin/wsl_tunnel.sh
+#   cp faas_register_tunnel.sh ~/bin/faas_register_tunnel.sh
+#   chmod 700 ~/bin/faas_register_tunnel.sh
 #
 # Configuration (recommended): create a file ~/.wsl_tunnel_env with:
 #   DOMAIN="bitone.in"
@@ -18,18 +18,11 @@
 #   chmod 600 ~/.wsl_tunnel_env
 #
 # Use with systemd service (examples below) or run manually:
-#   ~/bin/wsl_tunnel.sh start
-#   ~/bin/wsl_tunnel.sh stop
-#   ~/bin/wsl_tunnel.sh status
+#   ~/bin/faas_register_tunnel.sh start
+#   ~/bin/faas_register_tunnel.sh stop
+#   ~/bin/faas_register_tunnel.sh status
 #
 set -euo pipefail
-
-# Optional runtime flags (useful for local testing with self-signed certs)
-INSECURE="${INSECURE:-0}"       # 1 => curl -k (skip cert verify). Keep 0 in production.
-CURL_OPTS="${CURL_OPTS:-}"      # extra curl options, e.g. --cacert /path/to/ca.pem
-# TTL requested for new certs (seconds) — can be overridden in env
-REQUEST_TTL="${REQUEST_TTL:-3600}"
-
 
 # Load environment variables
 ENVFILE="${HOME}/.wsl_tunnel_env"
@@ -47,6 +40,11 @@ else
     fi
 fi
 
+# Optional runtime flags (useful for local testing with self-signed certs)
+INSECURE="${INSECURE:-0}"       # 1 => curl -k (skip cert verify). Keep 0 in production.
+CURL_OPTS="${CURL_OPTS:-}"      # extra curl options, e.g. --cacert /path/to/ca.pem
+# TTL requested for new certs (seconds) — can be overridden in env
+REQUEST_TTL="${REQUEST_TTL:-3600}"
 
 # Defaults (override via ~/.wsl_tunnel_env)
 DOMAIN="${DOMAIN:-bitone.in}"

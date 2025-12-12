@@ -18,7 +18,6 @@ SRC_SERVICE_UNIT="$SRC_DIR/faas_register_tunnel.service"
 
 # Destination locations (system-wide)
 DST_CLIENT="/usr/local/sbin/faas_register_tunnel.sh"
-DST_HELPER="/usr/local/sbin/fass_register_tunnel.sh"
 DST_SERVICE_UNIT="/etc/systemd/system/faas_register_tunnel.service"
 
 # Environment file (global)
