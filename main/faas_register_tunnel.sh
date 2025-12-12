@@ -52,7 +52,8 @@ request_certificate() {
     return 1
   fi
 
-  printf "%s" "$RESPONSE" | jq -r '.cert' > "$CERT"
+  printf "%s\n" "$(printf "%s" "$RESPONSE" | jq -r '.cert' | sed '/^$/d')" > "$CERT"
+
   chmod 600 "$CERT"
 
   log "Certificate renewed successfully: $CERT"

@@ -54,7 +54,8 @@ if ! printf "%s" "$CERT_RESPONSE" | jq -e '.cert' >/dev/null 2>&1; then
   exit 1
 fi
 
-printf "%s" "$CERT_RESPONSE" | jq -r '.cert' > "${KEY}-cert.pub"
+printf "%s\n" "$(printf "%s" "$RESPONSE" | jq -r '.cert' | sed '/^$/d')" > "${KEY}-cert.pub"
+
 
 echo "Certificate saved to ${KEY}-cert.pub"
 ssh-keygen -Lf "${KEY}-cert.pub" || true
