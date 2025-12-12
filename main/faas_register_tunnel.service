@@ -9,10 +9,10 @@ Type=simple
 User=root
 
 # Environment variables for DOMAIN, TOKEN, PRINCIPAL, USERNAME, LOCAL_PORT, etc.
-EnvironmentFile=/etc/wsl_tunnel.env
+EnvironmentFile=/etc/faas_register_tunnel.env
 
 # Script installed globally
-ExecStart=/usr/local/sbin/wsl_tunnel.sh daemon
+ExecStart=/usr/local/sbin/faas_register_tunnel.sh daemon
 
 Restart=on-failure
 RestartSec=10
