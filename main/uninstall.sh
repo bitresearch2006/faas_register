@@ -1,79 +1,78 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# uninstall.sh
-# Reverses the installation performed by install.sh.
-# Stops and disables the systemd service, removes installed files,
-# and cleans up the configuration and SSH keys.
-#
-# Run as root:
-#   sudo bash uninstall.sh
+echo "────────────────────────────────────────────"
+echo " FAAS WSL Tunnel — Uninstaller"
+echo "────────────────────────────────────────────"
 
-echo "=== FAAS Tunnel Service Uninstaller ==="
+SERVICE="/etc/systemd/system/faas_wsl_tunnel.service"
+SCRIPT="/usr/local/sbin/faas_wsl_tunnel.sh"
+ENV_FILE="/etc/faas_register_tunnel.env"
 
-# Check for root privileges
-if (( EUID != 0 )); then
-  echo "ERROR: Run this script with sudo or as root." >&2
+#--------------------------------------------------------------------
+# Require root
+#--------------------------------------------------------------------
+if [[ $EUID -ne 0 ]]; then
+  echo "ERROR: Run with sudo:"
+  echo "   sudo bash uninstall.sh"
   exit 1
 fi
 
-# Destination locations from install.sh
-DST_CLIENT="/usr/local/sbin/faas_register_tunnel.sh"
-DST_HELPER="/usr/local/sbin/fass_register_tunnel.sh"
-DST_SERVICE_UNIT="/etc/systemd/system/faas_register_tunnel.service"
-ENV_FILE="/etc/faas_register_tunnel.env"
+#--------------------------------------------------------------------
+stop_and_disable() {
+  if systemctl list-unit-files | grep -q "faas_wsl_tunnel.service"; then
+    echo "→ Stopping service…"
+    systemctl stop faas_wsl_tunnel.service 2>/dev/null || true
+    echo "→ Disabling service…"
+    systemctl disable faas_wsl_tunnel.service 2>/dev/null || true
+  fi
+}
 
-# Generated keys/certs (assuming the systemd service runs as root,
-# which uses /root/.ssh as the home directory for key storage,
-# based on the faas_register_tunnel.sh script's default KEY path.)
-ROOT_SSH_DIR="/root/.ssh"
-KEY="$ROOT_SSH_DIR/bitone_key"
-PUB="$KEY.pub"
-CERT="$KEY-cert.pub"
-LOGFILE="/root/wsl_tunnel.log" # Default log path when run as root
+#--------------------------------------------------------------------
+remove_file() {
+  local f="$1"
+  if [[ -f "$f" ]]; then
+    echo "→ Removing $f"
+    rm -f "$f"
+  else
+    echo "→ Skipping $f (not found)"
+  fi
+}
 
-# --- 1. Stop and Disable Systemd Service ---
-SERVICE_NAME="faas_register_tunnel.service"
-echo "--> Stopping and disabling systemd service: $SERVICE_NAME"
-systemctl stop "$SERVICE_NAME" || true
-systemctl disable "$SERVICE_NAME" || true
+#--------------------------------------------------------------------
+# Begin uninstall
+#--------------------------------------------------------------------
+stop_and_disable
+
+echo ""
+echo "→ Removing installed files…"
+remove_file "$SERVICE"
+remove_file "$SCRIPT"
+
+echo ""
+echo "→ Reloading systemd…"
 systemctl daemon-reload
 
-# --- 2. Remove Installed Files ---
-echo "--> Removing installed files..."
-for f in "$DST_CLIENT" "$DST_SERVICE_UNIT" "$DST_HELPER"; do
-  if [ -f "$f" ]; then
-    echo "    - Removing $f"
-    rm -f "$f"
+#--------------------------------------------------------------------
+# ENV file (optional)
+#--------------------------------------------------------------------
+echo ""
+if [[ -f "$ENV_FILE" ]]; then
+  read -r -p "Remove env file $ENV_FILE ? (y/N): " ANSWER
+  if [[ "$ANSWER" =~ ^[Yy]$ ]]; then
+    rm -f "$ENV_FILE"
+    echo "→ Environment file removed."
+  else
+    echo "→ Keeping environment file."
   fi
-done
-
-# --- 3. Remove Configuration and Logs ---
-echo "--> Removing configuration and log files..."
-if [ -f "$ENV_FILE" ]; then
-  echo "    - Removing environment file $ENV_FILE"
-  # Note: The user may want to back this up, but for a full uninstall, it is removed.
-  rm -f "$ENV_FILE"
+else
+  echo "→ Env file not found, skipping."
 fi
 
-# The log file location is /root/wsl_tunnel.log when the service runs as root.
-if [ -f "$LOGFILE" ]; then
-  echo "    - Removing log file $LOGFILE"
-  rm -f "$LOGFILE"
-fi
-
-# --- 4. Remove SSH Keys and Certificate ---
-echo "--> Removing generated SSH keys and certificate (root's .ssh directory)..."
-for f in "$KEY" "$PUB" "$CERT"; do
-  if [ -f "$f" ]; then
-    echo "    - Removing $f"
-    rm -f "$f"
-  fi
-done
-
-echo
-echo "UNINSTALL COMPLETE."
-echo "The tunnel service, scripts, config, keys, and logs have been removed."
-echo "If the token was compromised, inform the FAAS admin to revoke it."
-
-exit 0
+echo ""
+echo "────────────────────────────────────────────"
+echo " ✔ Uninstall complete."
+echo ""
+echo "You can verify:"
+echo "  systemctl status faas_wsl_tunnel.service"
+echo "────────────────────────────────────────────"

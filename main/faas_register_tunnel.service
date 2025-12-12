@@ -1,27 +1,18 @@
 [Unit]
-Description=WSL Tunnel autossh service (connect to VM)
+Description=FAAS WSL Reverse Tunnel with Auto Certificate Renewal
 After=network-online.target
 Wants=network-online.target
-StartLimitIntervalSec=500
-StartLimitBurst=5
 
 [Service]
 Type=simple
-# Runs as root so NO username required
-User=root
-
-# Environment variables for DOMAIN, TOKEN, PRINCIPAL, USERNAME, LOCAL_PORT, etc.
+User=bitresearch
 EnvironmentFile=/etc/faas_register_tunnel.env
+ExecStart=/usr/local/sbin/faas_register_tunnel.sh
 
-# Script installed globally
-ExecStart=/usr/local/sbin/faas_register_tunnel.sh daemon
-
-Restart=on-failure
-RestartSec=10
-
-# Send logs to the journal for easier inspection
-StandardOutput=journal
-StandardError=journal
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Install]
 WantedBy=multi-user.target
