@@ -92,6 +92,21 @@ log() {
   echo "[$(date -Is)] $*" | tee -a "$LOGFILE"
 }
 
+# if nginx is local, prefer connecting to 127.0.0.1 but preserve SNI using --resolve
+# set RESOLVE_OPT if DOMAIN resolves to 127.0.0.1 or if we're on the same host
+_set_curl_resolve() {
+  # default empty
+  RESOLVE_OPT=""
+  # If DOMAIN is not a literal localhost and the hostname resolves to loopback on this host,
+  # add --resolve so curl uses SNI=DOMAIN but connects to 127.0.0.1
+  if ! printf '%s\n' "$DOMAIN" | grep -Eq '^localhost$|^127\.0\.0\.1$|^\[::1\]$'; then
+    # check if DNS for DOMAIN points to this host's loopback (or if nginx listens only locally)
+    # we simply enable --resolve to force local connect — useful for single-host setups
+    RESOLVE_OPT="--resolve ${DOMAIN}:443:127.0.0.1"
+  fi
+}
+
+
 usage() {
   cat <<USAGE
 Usage: $0 {start|daemon|stop|status}
@@ -126,8 +141,10 @@ request_cert() {
 
   _build_request_params
   log "Requesting certificate from ${BASE_URL}/sign-cert (proto=${PROTO})"
-  RESP=$("$CURL_BIN" -s $EXTRA_CURL_OPTS -w "\n%{http_code}" -X POST "${BASE_URL}/sign-cert" \
-    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD") || { log "curl failed"; return 3; }
+  # ensure resolve opt set
+  _set_curl_resolve
+  RESP=$("$CURL_BIN" -s $RESOLVE_OPT $EXTRA_CURL_OPTS -w "\n%{http_code}" -X POST "${BASE_URL}/sign-cert" \
+    -H "Host: ${DOMAIN}" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD") || { log "curl failed"; return 3; }
 
   BODY=$(echo "$RESP" | sed '$d')
   CODE=$(echo "$RESP" | tail -n1)
@@ -152,8 +169,11 @@ discover_remote_port() {
   _build_request_params
   log "Querying whoami: ${BASE_URL}/whoami (proto=${PROTO})"
 
-  RESP=$("$CURL_BIN" -s $EXTRA_CURL_OPTS -w "\n%{http_code}" -X GET "${BASE_URL}/whoami" \
-    -H "Authorization: Bearer $TOKEN") || { log "curl whoami failed"; return 6; }
+  _set_curl_resolve
+
+  RESP=$("$CURL_BIN" -s $RESOLVE_OPT $EXTRA_CURL_OPTS -w "\n%{http_code}" -X GET "${BASE_URL}/whoami" \
+    -H "Host: ${DOMAIN}" -H "Authorization: Bearer $TOKEN") || { log "curl whoami failed"; return 6; }
+
   BODY=$(echo "$RESP" | sed '$d')
   CODE=$(echo "$RESP" | tail -n1)
 
