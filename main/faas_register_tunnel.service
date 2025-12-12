@@ -1,5 +1,5 @@
 [Unit]
-Description=FAAS WSL Reverse Tunnel with Auto Certificate Renewal
+Description=FAAS register Reverse Tunnel with Auto Certificate Renewal
 After=network-online.target
 Wants=network-online.target
 

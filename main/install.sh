@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "────────────────────────────────────────────"
-echo " FAAS WSL Tunnel Installer"
+echo " FAAS register Tunnel Installer"
 echo "────────────────────────────────────────────"
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -10,8 +10,8 @@ BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_SCRIPT="$BASE_DIR/faas_register_tunnel.sh"
 SRC_SERVICE="$BASE_DIR/faas_register_tunnel.service"
 
-DST_SCRIPT="/usr/local/sbin/faas_wsl_tunnel.sh"
-DST_SERVICE="/etc/systemd/system/faas_wsl_tunnel.service"
+DST_SCRIPT="/usr/local/sbin/faas_register_tunnel.sh"
+DST_SERVICE="/etc/systemd/system/faas_register_tunnel.service"
 ENV_FILE="/etc/faas_register_tunnel.env"
 
 #--------------------------------------------------------------------
@@ -93,7 +93,7 @@ echo "Reloading systemd…"
 systemctl daemon-reload
 
 echo "Enabling service…"
-systemctl enable faas_wsl_tunnel.service
+systemctl enable faas_register_tunnel.service
 
 echo ""
 echo "────────────────────────────────────────────"
@@ -103,8 +103,8 @@ echo "Edit your env file:"
 echo "  sudo nano /etc/faas_register_tunnel.env"
 echo ""
 echo "Start the service:"
-echo "  sudo systemctl start faas_wsl_tunnel.service"
+echo "  sudo systemctl start faas_register_tunnel.service"
 echo ""
 echo "Watch logs:"
-echo "  sudo journalctl -u faas_wsl_tunnel.service -f"
+echo "  sudo journalctl -u faas_register_tunnel.service -f"
 echo "────────────────────────────────────────────"

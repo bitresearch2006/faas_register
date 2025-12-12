@@ -2,11 +2,11 @@
 set -euo pipefail
 
 echo "────────────────────────────────────────────"
-echo " FAAS WSL Tunnel — Uninstaller"
+echo " FAAS register Tunnel — Uninstaller"
 echo "────────────────────────────────────────────"
 
-SERVICE="/etc/systemd/system/faas_wsl_tunnel.service"
-SCRIPT="/usr/local/sbin/faas_wsl_tunnel.sh"
+SERVICE="/etc/systemd/system/faas_register_tunnel.service"
+SCRIPT="/usr/local/sbin/faas_register_tunnel.sh"
 ENV_FILE="/etc/faas_register_tunnel.env"
 
 #--------------------------------------------------------------------
@@ -20,11 +20,11 @@ fi
 
 #--------------------------------------------------------------------
 stop_and_disable() {
-  if systemctl list-unit-files | grep -q "faas_wsl_tunnel.service"; then
+  if systemctl list-unit-files | grep -q "faas_register_tunnel.service"; then
     echo "→ Stopping service…"
-    systemctl stop faas_wsl_tunnel.service 2>/dev/null || true
+    systemctl stop faas_register_tunnel.service 2>/dev/null || true
     echo "→ Disabling service…"
-    systemctl disable faas_wsl_tunnel.service 2>/dev/null || true
+    systemctl disable faas_register_tunnel.service 2>/dev/null || true
   fi
 }
 
@@ -74,5 +74,5 @@ echo "────────────────────────�
 echo " ✔ Uninstall complete."
 echo ""
 echo "You can verify:"
-echo "  systemctl status faas_wsl_tunnel.service"
+echo "  systemctl status faas_register_tunnel.service"
 echo "────────────────────────────────────────────"
