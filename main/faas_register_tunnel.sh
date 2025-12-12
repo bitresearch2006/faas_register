@@ -24,6 +24,13 @@
 #
 set -euo pipefail
 
+# Optional runtime flags (useful for local testing with self-signed certs)
+INSECURE="${INSECURE:-0}"       # 1 => curl -k (skip cert verify). Keep 0 in production.
+CURL_OPTS="${CURL_OPTS:-}"      # extra curl options, e.g. --cacert /path/to/ca.pem
+# TTL requested for new certs (seconds) — can be overridden in env
+REQUEST_TTL="${REQUEST_TTL:-3600}"
+
+
 # Load environment variables
 ENVFILE="${HOME}/.wsl_tunnel_env"
 
@@ -63,6 +70,25 @@ for cmd in ssh curl jq python3; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "Required command not found: $cmd"; exit 2; }
 done
 
+# Determine protocol and curl options for the DOMAIN
+_build_request_params() {
+  # choose protocol: use http for localhost / 127.0.0.1, else https
+  if printf '%s\n' "$DOMAIN" | grep -Eq '^localhost$|^127\.0\.0\.1$|^\[::1\]$'; then
+    PROTO="http"
+  else
+    PROTO="https"
+  fi
+
+  # build EXTRA_CURL_OPTS
+  if [ "${PROTO}" = "https" ] && [ "${INSECURE:-0}" = "1" ]; then
+    EXTRA_CURL_OPTS="-k ${CURL_OPTS}"
+  else
+    EXTRA_CURL_OPTS="${CURL_OPTS}"
+  fi
+
+  BASE_URL="${PROTO}://${DOMAIN}"
+}
+
 # helper: timestamped log
 log() {
   echo "[$(date -Is)] $*" | tee -a "$LOGFILE"
@@ -92,11 +118,19 @@ request_cert() {
     log "ERROR: TOKEN not set. Put TOKEN in $ENVFILE or export it."
     return 10
   fi
+  if [ ! -f "$PUB" ]; then
+    log "ERROR: public key not found at $PUB"
+    return 11
+  fi
+
   PUB_CONTENT=$(cat "$PUB")
-  PAYLOAD=$(jq -n --arg pub "$PUB_CONTENT" --arg prin "$PRINCIPAL" --argjson ttl 3600 '{pubkey:$pub, principal:$prin, ttl:$ttl}')
-  log "Requesting certificate from https://${DOMAIN}/sign-cert"
-  RESP=$("$CURL_BIN" -s -w "\n%{http_code}" -X POST "https://${DOMAIN}/sign-cert" \
+  PAYLOAD=$(jq -n --arg pub "$PUB_CONTENT" --arg prin "$PRINCIPAL" --argjson ttl "$REQUEST_TTL" '{pubkey:$pub, principal:$prin, ttl:$ttl}')
+
+  _build_request_params
+  log "Requesting certificate from ${BASE_URL}/sign-cert (proto=${PROTO})"
+  RESP=$("$CURL_BIN" -s $EXTRA_CURL_OPTS -w "\n%{http_code}" -X POST "${BASE_URL}/sign-cert" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD") || { log "curl failed"; return 3; }
+
   BODY=$(echo "$RESP" | sed '$d')
   CODE=$(echo "$RESP" | tail -n1)
   if [ "$CODE" != "200" ]; then
@@ -117,15 +151,20 @@ request_cert() {
 }
 
 discover_remote_port() {
-  log "Querying whoami: https://${DOMAIN}/whoami"
-  RESP=$("$CURL_BIN" -s -w "\n%{http_code}" -X GET "https://${DOMAIN}/whoami" -H "Authorization: Bearer $TOKEN") || { log "curl whoami failed"; return 6; }
+  _build_request_params
+  log "Querying whoami: ${BASE_URL}/whoami (proto=${PROTO})"
+
+  RESP=$("$CURL_BIN" -s $EXTRA_CURL_OPTS -w "\n%{http_code}" -X GET "${BASE_URL}/whoami" \
+    -H "Authorization: Bearer $TOKEN") || { log "curl whoami failed"; return 6; }
   BODY=$(echo "$RESP" | sed '$d')
   CODE=$(echo "$RESP" | tail -n1)
+
   if [ "$CODE" != "200" ]; then
     log "whoami failed: HTTP $CODE"
     log "$BODY"
     return 7
   fi
+
   REMOTE_PORT_VAL=$(echo "$BODY" | jq -r '.port // empty')
   REMOTE_NAME=$(echo "$BODY" | jq -r '.name // empty')
   if [ -z "$REMOTE_PORT_VAL" ] || [ "$REMOTE_PORT_VAL" = "null" ]; then
