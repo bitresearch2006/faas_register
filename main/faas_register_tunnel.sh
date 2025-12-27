@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-###############################################################################
-# Load user configuration
-###############################################################################
-ENV_FILE="/etc/faas_register_tunnel.env"
+INSTANCE="${INSTANCE:-default}"
+ENV_DIR="/etc/faas_register_tunnel"
+ENV_FILE="${ENV_DIR}/${INSTANCE}.env"
 
-if [ ! -f "$ENV_FILE" ]; then
-  echo "[FATAL] Env file missing: $ENV_FILE"
+log() {
+  printf "[%s] [%s] %s\n" "$(date -Is)" "$INSTANCE" "$*"
+  logger -t "faas_tunnel[$INSTANCE]" "$*" || true
+}
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  log "FATAL: Env file not found: $ENV_FILE"
   exit 1
 fi
 
@@ -16,21 +20,11 @@ source "$ENV_FILE"
 
 KEY="$HOME/.ssh/bitone_key"
 CERT="$KEY-cert.pub"
-
 TTL_DEFAULT=3600
 RENEW_BEFORE="${RENEW_BEFORE:-300}"
 
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
-
-###############################################################################
-log() {
-  printf "[%s] %s\n" "$(date -Is)" "$*"
-  logger -t faas_tunnel "$*" || true
-}
-###############################################################################
-
-
 
 ###############################################################################
 # Request certificate from server
@@ -48,18 +42,14 @@ request_certificate() {
   )
 
   if ! printf "%s" "$RESPONSE" | jq -e '.cert' >/dev/null; then
-    log "ERROR: Certificate request failed: $RESPONSE"
+    log "ERROR: Cert request failed: $RESPONSE"
     return 1
   fi
 
-  # Extract raw certificate (may contain extra newlines)
-  CERT_CLEAN=$(printf "%s" "$RESPONSE" | jq -r '.cert' | tr -d '\\')
-  echo "$CERT_CLEAN" > "$CERT"
-
+  printf "%s" "$RESPONSE" | jq -r '.cert' | tr -d '\\' > "$CERT"
   chmod 600 "$CERT"
 
-  log "Certificate renewed successfully: $CERT"
-  return 0
+  log "Certificate saved: $CERT"
 }
 
 
@@ -69,12 +59,13 @@ request_certificate() {
 ###############################################################################
 get_remote_port() {
   local W
-  W=$(curl -sS -H "Authorization: Bearer ${TOKEN}" "https://${DOMAIN}/whoami")
+  W=$(curl -sS -H "Authorization: Bearer ${TOKEN}" \
+      "https://${DOMAIN}/whoami")
 
   PORT=$(printf "%s" "$W" | jq -r '.port')
 
-  if [ "$PORT" = "null" ] || [ -z "$PORT" ]; then
-    log "ERROR: /whoami returned invalid: $W"
+  if [[ -z "$PORT" || "$PORT" == "null" ]]; then
+    log "ERROR: Invalid whoami response: $W"
     return 1
   fi
   echo "$PORT"
@@ -87,8 +78,7 @@ get_remote_port() {
 ###############################################################################
 start_tunnel() {
   local PORT=$1
-
-  log "Starting tunnel: local:$LOCAL_PORT → remote:$PORT"
+  log "Starting tunnel local:${LOCAL_PORT} → remote:${PORT}"
 
   ssh -N \
     -i "$KEY" \

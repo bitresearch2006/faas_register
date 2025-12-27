@@ -1,12 +1,12 @@
 [Unit]
-Description=FAAS register Reverse Tunnel with Auto Certificate Renewal
+Description=FAAS register Reverse Tunnel with Auto Certificate Renewal (%i)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=bitresearch
-EnvironmentFile=/etc/faas_register_tunnel.env
+User=%i
+Environment=INSTANCE=%i
 ExecStart=/usr/local/sbin/faas_register_tunnel.sh
 
 Restart=always
