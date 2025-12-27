@@ -1,247 +1,262 @@
-FAAS Client Tunnel — WSL Registration & Reverse Tunnel System
+# FAAS Client Tunnel — Multi-User Reverse SSH Registration System
 
-This client-side package enables any WSL machine to automatically:
+This client package enables any Linux/WSL machine to securely register itself
+with a FAAS VM and expose a local service (e.g., on port 8080) over HTTPS using
+short-lived SSH certificates and a persistent reverse SSH tunnel.
 
-Obtain a short-lived SSH certificate from the FAAS VM using a token
+The v2 design supports **multiple tunnels on the same machine**, each isolated
+by a dedicated Linux user and systemd service instance.
 
-Discover its assigned remote TCP port dynamically via /whoami
+---
 
-Create a secure reverse SSH tunnel to the VM
+## ✨ Key Features
 
-Expose a local service (e.g., chatbot on port 8080) at a URL:
+- Obtain short-lived SSH certificates from the FAAS server using a token
+- Discover assigned remote TCP port dynamically via `/whoami`
+- Create a secure reverse SSH tunnel to the VM
+- Expose a local service at:
 
 https://bitone.in/<username>
 
+yaml
+Copy code
 
-Renew the certificate automatically before expiry
+- Auto-renew certificates before expiry
+- Auto-reconnect tunnels on failure and reboot
+- **Multi-user support**: one tunnel per Linux user
+- systemd-managed, no manual daemon handling
 
-Re-establish the tunnel automatically, including after reboot
+---
 
-This allows your WSL workstation to “register” itself with the remote VM and stay connected securely without manual steps.
+## 📁 Files Included
 
-📁 Files Included
-File	Purpose
-faas_register_tunnel.sh	Main WSL client script. Requests cert, discovers port, establishes autossh tunnel, renews certs.
-faas_register_tunnel.service	systemd service file to auto-start tunnel on boot.
-fass_register_tunnel.sh	Optional helper utility script used internally or by admin tooling.
-install.sh	Installer script to copy files, create environment config, enable systemd service.
+| File                          | Purpose |
+|-------------------------------|---------|
+| `faas_register_tunnel.sh`     | Main tunnel client script. Handles cert request, renewal, port discovery, and SSH tunnel loop. |
+| `faas_register_tunnel@.service` | systemd **template unit** to run one tunnel instance per Linux user. |
+| `install.sh`                 | Interactive installer. Creates Linux user (if missing), env file, SSH key, installs and enables service. |
+| `uninstall.sh`               | Removes a specific tunnel instance and optionally shared files and user. |
 
-All scripts are root-only and run under /usr/local/sbin.
+Installed locations:
 
-🚀 How It Works (Summary)
+/usr/local/sbin/faas_register_tunnel.sh
+/etc/systemd/system/faas_register_tunnel@.service
+/etc/faas_register_tunnel/<SERVICE_USER>.env
 
-You obtain a token from the server admin.
+yaml
+Copy code
 
-The client script sends your SSH public key + token to:
+---
+
+## 🧠 How It Works
+
+1. Admin provides you a **TOKEN**.
+2. Installer creates (or uses) a Linux user, e.g. `alice`.
+3. The client sends `alice`’s SSH public key + token to:
 
 https://bitone.in/sign-cert
 
+arduino
+Copy code
 
-The server signs the key with its SSH CA and returns a certificate.
-
-The client calls:
+4. Server returns a signed SSH certificate.
+5. Client queries:
 
 https://bitone.in/whoami
 
+arduino
+Copy code
 
-which returns:
+to get the assigned remote port (e.g., `9004`).
+6. Client opens a reverse tunnel:
 
-your registered username
+local:8080 → vm:127.0.0.1:9004
 
-your assigned reverse-tunnel port (e.g., 9004)
+markdown
+Copy code
 
-The client starts an autossh reverse tunnel:
+7. VM routes:
 
-WSL:8080  →  VM:127.0.0.1:9004
+https://bitone.in/alice → 127.0.0.1:9004
 
+yaml
+Copy code
 
-The VM’s NGINX routes:
+8. The script runs continuously:
+- renews cert before expiry
+- reconnects SSH if dropped
+9. systemd ensures it runs on boot.
 
-https://bitone.in/<username>  → 127.0.0.1:9004
+---
 
+## 🔧 Installation
 
-The client script monitors certificate expiry and renews automatically.
-
-systemd ensures the service reconnects on boot and after any interruption.
-
-🔧 Installation
-Step 1 — Place all files in one folder on WSL
+### Step 1 — Place files in a folder
 
 Example:
 
 ~/faas-client/
-  ├─ faas_register_tunnel.sh
-  ├─ faas_register_tunnel.service
-  └─ install.sh
+├─ faas_register_tunnel.sh
+├─ faas_register_tunnel@.service
+├─ install.sh
+└─ uninstall.sh
 
-Step 2 — Run the installer
+bash
+Copy code
+
+### Step 2 — Run installer
+
+```bash
 cd ~/faas-client
 sudo bash install.sh
+You will be prompted for:
 
+SERVICE_USER → Linux user to run the tunnel (e.g., alice)
+
+Domain → e.g., bitone.in
+
+Principal → remote SSH login user
+
+Local port → your local service port (e.g., 8080)
+
+Token → provided by admin
+
+If the Linux user does not exist, the installer will offer to create it.
 
 The installer will:
 
-Copy scripts into /usr/local/sbin/
+Create /etc/faas_register_tunnel/<SERVICE_USER>.env
 
-Install the systemd unit into /etc/systemd/system/
+Generate SSH key for that user (if missing)
 
-Create the env file /etc/wsl_tunnel.env (secure permissions)
+Install script and systemd template
 
-Enable + start the system service
+Enable: faas_register_tunnel@<SERVICE_USER>.service
 
-Show its status
+⚙️ Per-User Configuration
+Each tunnel instance has its own env file:
 
-⚙️ Configure the Client
+bash
+Copy code
+/etc/faas_register_tunnel/<SERVICE_USER>.env
+Example: /etc/faas_register_tunnel/alice.env
 
-After installation, edit:
-
-sudo nano /etc/wsl_tunnel.env
-
-
-Example:
-
+bash
+Copy code
 DOMAIN="bitone.in"
-TOKEN="PASTE_YOUR_TOKEN_HERE"
-PRINCIPAL="bitresearch"
-USERNAME="alice"     # must match VM registration
+TOKEN="PASTE_TOKEN_HERE"
+PRINCIPAL="bitresearch2006"
 LOCAL_PORT=8080
-RENEW_BEFORE=300     # renew 5 minutes before expiry
+RENEW_BEFORE=300
+Permissions are restricted to the service user.
 
+▶️ Managing the Service
+Start:
 
-Required:
+bash
+Copy code
+sudo systemctl start faas_register_tunnel@alice
+Stop:
 
-TOKEN ← provided by the FAAS admin
+bash
+Copy code
+sudo systemctl stop faas_register_tunnel@alice
+Enable at boot:
 
-USERNAME ← the VM maps this to a specific route
+bash
+Copy code
+sudo systemctl enable faas_register_tunnel@alice
+Status:
 
-LOCAL_PORT ← your local chatbot/service port
+bash
+Copy code
+sudo systemctl status faas_register_tunnel@alice
+You can repeat installation for other users (e.g., bob, carol) to run
+multiple tunnels in parallel.
 
-Save and ensure:
+🔍 Logs & Monitoring
+View logs for a user:
 
-sudo chmod 600 /etc/wsl_tunnel.env
+bash
+Copy code
+sudo journalctl -u faas_register_tunnel@alice -f
+Check certificate:
 
-▶️ Running the Client Manually (Optional)
-Start the tunnel once:
-sudo faas_register_tunnel.sh start
+bash
+Copy code
+sudo ssh-keygen -Lf /home/alice/.ssh/bitone_key-cert.pub
+🌐 Accessing Your Service
+Once connected:
 
-Begin the continuous renewal daemon:
-sudo faas_register_tunnel.sh daemon
-
-Stop tunnel:
-sudo faas_register_tunnel.sh stop
-
-Show status:
-sudo faas_register_tunnel.sh status
-
-🔁 Automatic Startup via Systemd
-
-The installer already enabled the service.
-To check:
-
-sudo systemctl status faas_register_tunnel.service
-
-
-To manually enable:
-
-sudo systemctl enable --now faas_register_tunnel.service
-
-
-To stop:
-
-sudo systemctl stop faas_register_tunnel.service
-
-
-To disable:
-
-sudo systemctl disable faas_register_tunnel.service
-
-🔍 Monitoring & Logs
-View live logs:
-sudo journalctl -u faas_register_tunnel.service -f
-
-
-Look for:
-
-cert renewal
-
-autossh reconnect
-
-tunnel established
-
-discovery of remote port
-
-Check cert info:
-sudo ssh-keygen -L -f /root/.ssh/bitone_key-cert.pub
-
-Check autossh is running:
-ps aux | grep autossh
-
-🌐 Accessing Your Exposed Service
-
-Once connected, your local WSL service becomes public at:
-
-https://bitone.in/<USERNAME>
-
-
+php-template
+Copy code
+https://bitone.in/<SERVICE_USER>
 Example:
 
+arduino
+Copy code
 https://bitone.in/alice
+This maps to:
 
+php-template
+Copy code
+alice's localhost:<LOCAL_PORT>
 🛡 Security Notes
+Env files are user-specific and protected (600).
 
-/etc/wsl_tunnel.env must be root-only (600).
+Tokens grant cert signing — keep them secret.
 
-Your token grants access to certificate signing — keep it secret.
+Certificates are short-lived and auto-renewed.
 
-The certificate TTL is short-lived; renewal maintains security.
+Each tunnel runs as its own Linux user for isolation.
 
-Root permissions are required because the tunnel modifies SSH behavior.
-
-autossh is sandboxed and only exposes local > VM tunnels; VM cannot reach your WSL system outside that port.
+Only the specified local port is exposed via reverse tunnel.
 
 ❗ Troubleshooting
-1. Service fails to start
+Service fails to start
 
-Check logs:
-
-sudo journalctl -u faas_register_tunnel.service -f
-
-
+bash
+Copy code
+sudo journalctl -u faas_register_tunnel@alice -f
 Common causes:
 
-Wrong TOKEN
+Invalid TOKEN
 
-Missing LOCAL_PORT service
+Wrong PRINCIPAL
 
-VM unreachable
+Local service not running on LOCAL_PORT
 
-Certificate signing failed
+Server unreachable
 
-2. Tunnel up but no external access
+Tunnel up but no external access
 
-On VM, the admin should check:
+On VM, admin should verify:
 
-/etc/tunnel/user_ports.json
-/etc/nginx/conf.d/users/<username>.conf
+user/port mapping
 
-3. Can’t discover remote port
+NGINX route for the user
 
-Means /whoami is returning 403 → token is invalid or revoked.
+/whoami returns invalid
 
-✔️ Summary
+Token may be revoked or not registered.
 
-This client system:
+🧹 Uninstall
+To remove a specific tunnel:
 
-Registers WSL with the remote FAAS platform
+bash
+Copy code
+sudo bash uninstall.sh
+Enter:
 
-Automatically provisions SSH certificates
+ini
+Copy code
+SERVICE_USER = alice
+The uninstaller will:
 
-Discovers tunnel port dynamically
+Stop & disable faas_register_tunnel@alice
 
-Maintains a persistent reverse tunnel
+Optionally remove /etc/faas_register_tunnel/alice.env
 
-Exposes your local service over HTTPS
+Optionally remove Linux user alice
 
-Survives reboots
-
-Requires zero manual intervention after setup
+Optionally remove shared files if no instances remain
