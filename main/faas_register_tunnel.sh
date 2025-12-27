@@ -32,6 +32,7 @@ chmod 700 "$HOME/.ssh"
 request_certificate() {
   log "Requesting new certificate..."
 
+  [[ -f "${KEY}.pub" ]] || { log "FATAL: Public key missing: ${KEY}.pub"; return 1; }
   PUBKEY=$(cat "${KEY}.pub")
 
   RESPONSE=$(curl -sS \
@@ -59,9 +60,7 @@ request_certificate() {
 ###############################################################################
 get_remote_port() {
   local W
-  W=$(curl -sS -H "Authorization: Bearer ${TOKEN}" \
-      "https://${DOMAIN}/whoami")
-
+  W=$(curl -sS -H "Authorization: Bearer ${TOKEN}" "https://${DOMAIN}/whoami")
   PORT=$(printf "%s" "$W" | jq -r '.port')
 
   if [[ -z "$PORT" || "$PORT" == "null" ]]; then
@@ -97,14 +96,14 @@ start_tunnel() {
 ###############################################################################
 # MAIN LOOP: Renew cert + restart SSH tunnel
 ###############################################################################
-if [ ! -f "${KEY}" ]; then
+if [[ ! -f "${KEY}" ]]; then
   log "Key does not exist. Generate manually first!"
   exit 1
 fi
 
 while true; do
   # 1) Ensure certificate exists
-  if [ ! -f "$CERT" ]; then
+  if [[ ! -f "$CERT" ]]; then
     request_certificate || { sleep 30; continue; }
   fi
 
@@ -126,9 +125,6 @@ while true; do
   fi
 
   NOW_SECONDS=$(date +%s)
-  EXP_SECONDS=$(date -d "$EXPIRY" +%s)
-  NOW_SECONDS=$(date +%s)
-
   if (( EXP_SECONDS - NOW_SECONDS < RENEW_BEFORE )); then
     log "Certificate expiring soon → renewing now"
     request_certificate || { sleep 30; continue; }

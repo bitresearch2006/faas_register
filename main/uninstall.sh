@@ -55,7 +55,10 @@ fi
 # Check if any instances remain
 #--------------------------------------------------------------------
 echo ""
-REMAINING=$(systemctl list-unit-files "faas_register_tunnel@*.service" --no-legend 2>/dev/null | wc -l)
+REMAINING=$(systemctl list-unit-files "faas_register_tunnel@*.service" --no-legend 2>/dev/null \
+  | awk '{print $1}' \
+  | grep -v '^faas_register_tunnel@\.service$' \
+  | wc -l)
 
 if (( REMAINING == 0 )); then
   echo "→ No remaining tunnel instances found."

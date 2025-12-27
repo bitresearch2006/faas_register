@@ -44,6 +44,12 @@ ENV_FILE="$ENV_DIR/${SERVICE_USER}.env"
 #--------------------------------------------------------------------
 # 3. Install ENV file (owned by the SERVICE_USER)
 #--------------------------------------------------------------------
+
+if [[ -f "$ENV_FILE" ]]; then
+  echo "Env file already exists: $ENV_FILE"
+  read -rp "Overwrite it? (y/N): " OW
+  [[ "$OW" =~ ^[Yy]$ ]] || { echo "Aborting."; exit 1; }
+fi
 cat >"$ENV_FILE" <<EOF
 DOMAIN="$DOMAIN"
 TOKEN="$TOKEN"
