@@ -1,262 +1,310 @@
-# FAAS Client Tunnel — Multi-User Reverse SSH Registration System
+# FAAS Client Tunnel – Multi-User Reverse SSH Client
 
-This client package enables any Linux/WSL machine to securely register itself
-with a FAAS VM and expose a local service (e.g., on port 8080) over HTTPS using
-short-lived SSH certificates and a persistent reverse SSH tunnel.
+This package provides a **fully automated client** for registering Linux/WSL machines with a FAAS VM and exposing local services over HTTPS using **short-lived SSH certificates** and persistent reverse SSH tunnels.
 
-The v2 design supports **multiple tunnels on the same machine**, each isolated
-by a dedicated Linux user and systemd service instance.
+The design follows a **multi-user isolation model**, where each tunnel runs as a dedicated Linux user under systemd supervision.
 
 ---
 
-## ✨ Key Features
+## Features
 
-- Obtain short-lived SSH certificates from the FAAS server using a token
-- Discover assigned remote TCP port dynamically via `/whoami`
-- Create a secure reverse SSH tunnel to the VM
-- Expose a local service at:
+* Token-based SSH certificate authentication
+* Dynamic remote port discovery via `/whoami`
+* Persistent reverse SSH tunnel
+* Automatic certificate renewal
+* Automatic tunnel reconnect
+* Multi-user support (one tunnel per Linux user)
+* systemd-managed lifecycle
+* No manual daemon handling
 
+Each user can expose a local service as:
+
+```
 https://bitone.in/<username>
-
-yaml
-Copy code
-
-- Auto-renew certificates before expiry
-- Auto-reconnect tunnels on failure and reboot
-- **Multi-user support**: one tunnel per Linux user
-- systemd-managed, no manual daemon handling
+```
 
 ---
 
-## 📁 Files Included
+## Files Included
 
-| File                          | Purpose |
-|-------------------------------|---------|
-| `faas_register_tunnel.sh`     | Main tunnel client script. Handles cert request, renewal, port discovery, and SSH tunnel loop. |
-| `faas_register_tunnel@.service` | systemd **template unit** to run one tunnel instance per Linux user. |
-| `install.sh`                 | Interactive installer. Creates Linux user (if missing), env file, SSH key, installs and enables service. |
-| `uninstall.sh`               | Removes a specific tunnel instance and optionally shared files and user. |
+| File | Purpose |
+|------|--------|
+| `faas_register_tunnel.sh` | Main client script |
+| `faas_register_tunnel@.service` | systemd template unit |
+| `install.sh` | Interactive installer |
+| `uninstall.sh` | Per-user uninstaller |
 
-Installed locations:
+Installed paths:
 
-/usr/local/sbin/faas_register_tunnel.sh
-/etc/systemd/system/faas_register_tunnel@.service
-/etc/faas_register_tunnel/<SERVICE_USER>.env
-
-yaml
-Copy code
+| Path | Purpose |
+|------|--------|
+| `/usr/local/sbin/faas_register_tunnel.sh` | Runtime client |
+| `/etc/systemd/system/faas_register_tunnel@.service` | Service template |
+| `/etc/faas_register_tunnel/<USER>.env` | Per-user config |
 
 ---
 
-## 🧠 How It Works
+## System Flow
 
-1. Admin provides you a **TOKEN**.
-2. Installer creates (or uses) a Linux user, e.g. `alice`.
-3. The client sends `alice`’s SSH public key + token to:
+### 1. Token Provisioning
 
+Administrator provides a **TOKEN** for the user.
+
+---
+
+### 2. Certificate Request
+
+Client sends:
+
+* SSH public key
+* Token
+
+To:
+
+```
 https://bitone.in/sign-cert
+```
 
-arduino
-Copy code
-
-4. Server returns a signed SSH certificate.
-5. Client queries:
-
-https://bitone.in/whoami
-
-arduino
-Copy code
-
-to get the assigned remote port (e.g., `9004`).
-6. Client opens a reverse tunnel:
-
-local:8080 → vm:127.0.0.1:9004
-
-markdown
-Copy code
-
-7. VM routes:
-
-https://bitone.in/alice → 127.0.0.1:9004
-
-yaml
-Copy code
-
-8. The script runs continuously:
-- renews cert before expiry
-- reconnects SSH if dropped
-9. systemd ensures it runs on boot.
+Server returns a signed SSH certificate.
 
 ---
 
-## 🔧 Installation
+### 3. Port Discovery
 
-### Step 1 — Place files in a folder
+Client queries:
 
-Example:
+```
+https://bitone.in/whoami
+```
 
-~/faas-client/
+Receives assigned remote port (e.g. `9004`).
+
+---
+
+### 4. Tunnel Establishment
+
+Client opens:
+
+```
+local:8080 → vm:127.0.0.1:9004
+```
+
+Using:
+
+```bash
+ssh -N -R 127.0.0.1:9004:localhost:8080 principal@bitone.in
+```
+
+---
+
+### 5. Public Routing
+
+VM maps:
+
+```
+https://bitone.in/alice → 127.0.0.1:9004
+```
+
+---
+
+### 6. Continuous Operation
+
+The client:
+
+* Renews certificates before expiry
+* Reconnects tunnels on failure
+* Runs indefinitely under systemd
+
+---
+
+## Installation
+
+### Step 1 – Prepare Files
+
+Place all files in a directory:
+
+```
+faas-client/
 ├─ faas_register_tunnel.sh
 ├─ faas_register_tunnel@.service
 ├─ install.sh
 └─ uninstall.sh
+```
 
-bash
-Copy code
+---
 
-### Step 2 — Run installer
+### Step 2 – Run Installer
 
 ```bash
-cd ~/faas-client
+cd faas-client
 sudo bash install.sh
-You will be prompted for:
+```
 
-SERVICE_USER → Linux user to run the tunnel (e.g., alice)
+Prompts:
 
-Domain → e.g., bitone.in
+* SERVICE_USER
+* DOMAIN
+* PRINCIPAL
+* LOCAL_PORT
+* TOKEN
 
-Principal → remote SSH login user
+If user does not exist, installer offers to create it.
 
-Local port → your local service port (e.g., 8080)
+Installer performs:
 
-Token → provided by admin
+* Creates env file
+* Generates SSH key
+* Installs scripts
+* Enables systemd service
 
-If the Linux user does not exist, the installer will offer to create it.
+---
 
-The installer will:
+## Per-User Configuration
 
-Create /etc/faas_register_tunnel/<SERVICE_USER>.env
+Each user has:
 
-Generate SSH key for that user (if missing)
+```
+/etc/faas_register_tunnel/<USER>.env
+```
 
-Install script and systemd template
+Example:
 
-Enable: faas_register_tunnel@<SERVICE_USER>.service
-
-⚙️ Per-User Configuration
-Each tunnel instance has its own env file:
-
-bash
-Copy code
-/etc/faas_register_tunnel/<SERVICE_USER>.env
-Example: /etc/faas_register_tunnel/alice.env
-
-bash
-Copy code
+```bash
 DOMAIN="bitone.in"
-TOKEN="PASTE_TOKEN_HERE"
+TOKEN="TOKEN_VALUE"
 PRINCIPAL="bitresearch2006"
 LOCAL_PORT=8080
 RENEW_BEFORE=300
-Permissions are restricted to the service user.
+```
 
-▶️ Managing the Service
+Permissions: `600`, owned by service user.
+
+---
+
+## Service Management
+
 Start:
 
-bash
-Copy code
+```bash
 sudo systemctl start faas_register_tunnel@alice
+```
+
 Stop:
 
-bash
-Copy code
+```bash
 sudo systemctl stop faas_register_tunnel@alice
+```
+
 Enable at boot:
 
-bash
-Copy code
+```bash
 sudo systemctl enable faas_register_tunnel@alice
+```
+
 Status:
 
-bash
-Copy code
+```bash
 sudo systemctl status faas_register_tunnel@alice
-You can repeat installation for other users (e.g., bob, carol) to run
-multiple tunnels in parallel.
+```
 
-🔍 Logs & Monitoring
-View logs for a user:
+---
 
-bash
-Copy code
+## Logs & Diagnostics
+
+Logs:
+
+```bash
 sudo journalctl -u faas_register_tunnel@alice -f
-Check certificate:
+```
 
-bash
-Copy code
+Certificate inspection:
+
+```bash
 sudo ssh-keygen -Lf /home/alice/.ssh/bitone_key-cert.pub
-🌐 Accessing Your Service
-Once connected:
+```
 
-php-template
-Copy code
-https://bitone.in/<SERVICE_USER>
-Example:
+---
 
-arduino
-Copy code
+## Accessing the Service
+
+Public URL:
+
+```
 https://bitone.in/alice
-This maps to:
+```
 
-php-template
-Copy code
-alice's localhost:<LOCAL_PORT>
-🛡 Security Notes
-Env files are user-specific and protected (600).
+Maps to:
 
-Tokens grant cert signing — keep them secret.
+```
+alice:localhost:8080
+```
 
-Certificates are short-lived and auto-renewed.
+---
 
-Each tunnel runs as its own Linux user for isolation.
+## Security Model
 
-Only the specified local port is exposed via reverse tunnel.
+* Tokens are secret
+* Certificates are short-lived
+* One Linux user per tunnel
+* Only specified port is exposed
+* Reverse tunnel bound to localhost
 
-❗ Troubleshooting
-Service fails to start
+---
 
-bash
-Copy code
+## Troubleshooting
+
+### Service Fails to Start
+
+```bash
 sudo journalctl -u faas_register_tunnel@alice -f
+```
+
 Common causes:
 
-Invalid TOKEN
+* Invalid token
+* Wrong principal
+* Local service not running
+* VM unreachable
 
-Wrong PRINCIPAL
+---
 
-Local service not running on LOCAL_PORT
-
-Server unreachable
-
-Tunnel up but no external access
+### Tunnel Works but No Access
 
 On VM, admin should verify:
 
-user/port mapping
+* User exists
+* Port mapping
+* Nginx routing
+* Token still active
 
-NGINX route for the user
+---
 
-/whoami returns invalid
+## Uninstall
 
-Token may be revoked or not registered.
+Remove one tunnel:
 
-🧹 Uninstall
-To remove a specific tunnel:
-
-bash
-Copy code
+```bash
 sudo bash uninstall.sh
-Enter:
+```
 
-ini
-Copy code
-SERVICE_USER = alice
-The uninstaller will:
+Actions:
 
-Stop & disable faas_register_tunnel@alice
+* Stops service
+* Disables systemd unit
+* Removes env file
+* Optionally removes user
+* Optionally removes shared files
 
-Optionally remove /etc/faas_register_tunnel/alice.env
+---
 
-Optionally remove Linux user alice
+## Conclusion
 
-Optionally remove shared files if no instances remain
+This client provides:
+
+* Secure FAAS registration
+* Zero manual SSH handling
+* Multi-user isolation
+* Automatic recovery
+
+Designed for large-scale WSL and Linux tunnel clients with strict operational safety.
+
