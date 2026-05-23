@@ -129,12 +129,13 @@ chmod 644 "$DST_SERVICE"
 echo "Reloading systemd…"
 systemctl daemon-reload
 systemctl enable "faas_register_tunnel@${SERVICE_USER}.service"
+systemctl start "faas_register_tunnel@${SERVICE_USER}.service"
 
 echo
 echo "✔ Installed for service user: $SERVICE_USER"
 echo
-echo "Start service:"
-echo "  sudo systemctl start faas_register_tunnel@${SERVICE_USER}"
+echo "ReStart service:"
+echo "  sudo systemctl restart faas_register_tunnel@${SERVICE_USER}"
 echo
 echo "Logs:"
 echo "  sudo journalctl -u faas_register_tunnel@${SERVICE_USER} -f"
