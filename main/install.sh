@@ -29,13 +29,18 @@ if ! id "$SERVICE_USER" &>/dev/null; then
     echo "  2) Password-protected (prompt for password)"
     read -rp "Selection [1/2]: " MODE
 
+    # Check if a group with the same name already exists
+    if getent group "$SERVICE_USER" >/dev/null; then
+      GROUP_OPT="--ingroup $SERVICE_USER"
+    else
+      GROUP_OPT=""
+    fi
+
     if [[ "$MODE" == "1" ]]; then
-      # Create user without password
-      adduser --disabled-password --gecos "" "$SERVICE_USER"
+      adduser --disabled-password --gecos "" $GROUP_OPT "$SERVICE_USER"
       echo "Created passwordless user '$SERVICE_USER'"
     elif [[ "$MODE" == "2" ]]; then
-      # Normal adduser flow (will ask for password)
-      adduser "$SERVICE_USER"
+      adduser $GROUP_OPT "$SERVICE_USER"
       echo "Created password-protected user '$SERVICE_USER'"
     else
       echo "Invalid selection. Aborting."
@@ -46,6 +51,7 @@ if ! id "$SERVICE_USER" &>/dev/null; then
     exit 1
   fi
 fi
+
 
 
 # Get the user's home directory and group dynamically
