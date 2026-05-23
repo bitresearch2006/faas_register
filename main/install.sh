@@ -24,12 +24,29 @@ if ! id "$SERVICE_USER" &>/dev/null; then
   echo "User '$SERVICE_USER' does not exist."
   read -rp "Create user '$SERVICE_USER'? [y/N]: " ANS
   if [[ "$ANS" =~ ^[Yy]$ ]]; then
-    adduser "$SERVICE_USER"
+    echo "Choose account type:"
+    echo "  1) Passwordless (no password, SSH key only)"
+    echo "  2) Password-protected (prompt for password)"
+    read -rp "Selection [1/2]: " MODE
+
+    if [[ "$MODE" == "1" ]]; then
+      # Create user without password
+      adduser --disabled-password --gecos "" "$SERVICE_USER"
+      echo "Created passwordless user '$SERVICE_USER'"
+    elif [[ "$MODE" == "2" ]]; then
+      # Normal adduser flow (will ask for password)
+      adduser "$SERVICE_USER"
+      echo "Created password-protected user '$SERVICE_USER'"
+    else
+      echo "Invalid selection. Aborting."
+      exit 1
+    fi
   else
     echo "Aborting. Please create user manually."
     exit 1
   fi
 fi
+
 
 # Get the user's home directory and group dynamically
 SERVICE_HOME=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
